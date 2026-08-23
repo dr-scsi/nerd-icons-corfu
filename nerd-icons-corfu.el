@@ -116,7 +116,10 @@ present.  This applies to both element variants.
 In the first case, the elements should have the form (KIND :style ICON-STY :icon
 ICON-NAME [:face FACE]).  ICON-STY is a string with the icon style to use, from
 those available in Nerd Fonts.  ICON-NAME is a string with the name of the icon.
-FACE, if present, is applied to the icon, mainly for its color.
+FACE, if present, is applied to the icon, mainly for its color.  The face of the
+final icon chosen is the result of composing FACE with what `nerd-icons' already
+propertizes into the icon, because otherwise one may override the other.  Thus,
+the property's form will be something like `(FACE :family \"Your Symbols Font\" ...)'.
 
 In case of more complex customizations that need to know the completion
 candidate itself, one can use a mapping like (KIND :fn ICON-FN [:face FACE]),
@@ -143,19 +146,21 @@ The mapping of kind -> icon is defined by the user in
 dynamic (has an `:fn' property)."
   (let* ((icon-entry (or (alist-get (or kind t) nerd-icons-corfu-mapping)
                          (alist-get t nerd-icons-corfu-mapping)))
-         (face (plist-get icon-entry :face)))
-    (or (and-let* ((fn (plist-get icon-entry :fn))
-                   (icon (funcall fn cand))
-                   (icon-with-face (propertize icon 'face face))))
-        (and-let* ((style (plist-get icon-entry :style))
-                   (icon (plist-get icon-entry :icon))
-                   (icon-fn (intern (concat "nerd-icons-" style "icon")))
-                   (icon-name (concat "nf-" style "-" icon))
-                   ((fboundp icon-fn))
-                   ((funcall icon-fn icon-name :face face))))
-        (and-let* ((face)
-                   ((propertize "?" 'face face))))
-        "?")))
+         (face-from-entry (plist-get icon-entry :face))
+         (icon (or (and-let* ((fn (plist-get icon-entry :fn))
+                              (icon (funcall fn cand))))
+                   (and-let* ((style (plist-get icon-entry :style))
+                              (icon (plist-get icon-entry :icon))
+                              (icon-fn (intern (concat "nerd-icons-" style "icon")))
+                              (icon-name (concat "nf-" style "-" icon))
+                              ((fboundp icon-fn))
+                              ((funcall icon-fn icon-name))))
+                   "?"))
+         (face-from-icon (get-text-property 0 'face icon))
+         (composed-face (if face-from-entry
+                            `(,@face-from-icon :inherit ,face-from-entry)
+                          face-from-icon)))
+    (propertize icon 'face composed-face)))
 
 (defun nerd-icons-corfu--eval-space ()
   "Evaluate which space (full or half-width) should be used."
